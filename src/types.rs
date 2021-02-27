@@ -47,13 +47,22 @@ impl FromRegValue for String {
     }
 }
 
+unsafe fn from_raw_without_trailing_nulls(bytes:&[u8]) -> &[u16] {
+    let     ptr = bytes.as_ptr() as *const u16;
+    let mut len = bytes.len() / 2;
+    while len > 0 && ptr.offset(len as isize - 1).read() == 0 {
+        len = len - 1;
+    }
+    #[allow(clippy::cast_ptr_alignment)]
+    slice::from_raw_parts(ptr,len)
+}
+
 impl FromRegValue for OsString {
     fn from_reg_value(val: &RegValue) -> io::Result<OsString> {
         match val.vtype {
             REG_SZ | REG_EXPAND_SZ | REG_MULTI_SZ => {
                 let words = unsafe {
-                    #[allow(clippy::cast_ptr_alignment)]
-                    slice::from_raw_parts(val.bytes.as_ptr() as *const u16, val.bytes.len() / 2)
+                    from_raw_without_trailing_nulls(&val.bytes)
                 };
                 let s = OsString::from_wide(words);
                 Ok(s)
